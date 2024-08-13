@@ -34,7 +34,6 @@ func main() {
 					break
 				}
 				data := make([]byte, *b+4)
-
 				// 使用binary包将int32值编码为字节序列
 				// binary.BigEndian指定大端模式，也可以选择binary.LittleEndian
 				binary.BigEndian.PutUint32(data, uint32(*b))
@@ -42,6 +41,21 @@ func main() {
 				_, err := conn.Write(data)
 				if err != nil {
 					fmt.Println(err)
+				}
+				lengthBytes := make([]byte, 4)
+				_, err = conn.Read(lengthBytes)
+				if err != nil {
+					fmt.Println("Error reading:", err.Error())
+					break
+				}
+				length := binary.BigEndian.Uint32(lengthBytes)
+
+				// 读取数据
+				data = make([]byte, length)
+				_, err = conn.Read(data)
+				if err != nil {
+					fmt.Println("Error reading:", err.Error())
+					break
 				}
 			}
 		}()
