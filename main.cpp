@@ -8,7 +8,7 @@
 #include <unistd.h>
 #include <string.h>
 
-int send_n_data(int sock, size_t len) {
+int send_n_data(int sock, size_t len,char *data_ptr) {
     // 发送长度信息
     uint32_t net_len = htonl(len);  // 将长度转换为网络字节序
     if (send(sock, &net_len, sizeof(net_len), 0) != sizeof(net_len)) {
@@ -17,16 +17,13 @@ int send_n_data(int sock, size_t len) {
 
     // 发送实际数据
     size_t total_sent = 0;
-    char *data_ptr = (char*)malloc(len);
     while (total_sent < len) {
         ssize_t sent = send(sock, data_ptr + total_sent, len - total_sent, 0);
         if (sent == -1) {
-            free(data_ptr);
             return -1;
         }
         total_sent += sent;
     }
-    free(data_ptr);
     return int(total_sent);
 }
 
@@ -48,9 +45,8 @@ size_t read_n_bytes(int fd, char *buffer, size_t n) {
 }
 
 // 主函数：从socket读取4字节长度，然后读取对应长度的数据
-int read_message(int socket_fd) {
+int read_message(int socket_fd,char *data) {
     uint32_t length;
-    char *data;
 
     // 首先读取4字节的长度信息
     if (read_n_bytes(socket_fd, (char *)&length, 4) != 4) {
@@ -79,15 +75,19 @@ int read_message(int socket_fd) {
 
 void run(int fd){
     std::cout << "recv fd:" << fd << std::endl;
+    char* readBuff = (char*)malloc(1024000);
+    char* writeBuff = (char*)malloc(1024000);
     while (true){
-        if (read_message(fd) < 0){
+        if (read_message(fd,readBuff) < 0){
             break;
         }
-        if (send_n_data(fd, 1024) < 0){
+        if (send_n_data(fd, 1024, writeBuff) < 0){
             break;
         }
     }
     close(fd);
+    free(readBuff);
+    free(writeBuff);
     std::cout << "recv end fd:" << fd << std::endl;
 }
 
@@ -120,7 +120,7 @@ int main() {
         if(fd < 0){
             continue;
         }
-        threads.push_back(std::thread(run, fd));
+        std::thread(run, fd).detach();
         std::cout<<"new cli: " << cli.sin_addr.s_addr<<std::endl;
     }
 }

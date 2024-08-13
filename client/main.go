@@ -12,18 +12,26 @@ import (
 
 var (
 	server = flag.String("s", "127.0.0.1:8888", "服务端地址")
-	client = flag.Int("c", 1, "并发数")
+	start  = flag.Int("start", 10, "起始并发数")
+	end    = flag.Int("end", 10, "结束并发数")
+	step   = flag.Int("step", 10, "步进")
 	ts     = flag.Float64("t", 10, "持续时间秒")
 	b      = flag.Int("b", 1024, "单次数据大小")
 )
 
-func main() {
-	flag.Parse()
+type res struct {
+	client  int
+	counter int64
+	qps     int64
+	avgCost int64
+}
+
+func benchMark(c int) *res {
 	wg := &sync.WaitGroup{}
 	start := time.Now()
 	var counter = &atomic.Int64{}
 	var times = &atomic.Int64{}
-	for i := 0; i < *client; i++ {
+	for i := 0; i < c; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -62,12 +70,28 @@ func main() {
 					fmt.Println("Error reading:", err.Error())
 					break
 				}
-				times.Add(time.Now().Sub(start).Milliseconds())
+				times.Add(time.Now().Sub(start).Microseconds())
 			}
 		}()
 	}
 	wg.Wait()
-	fmt.Println("counter: ", counter.Load())
-	fmt.Println("qps: ", counter.Load()/int64(*ts))
-	fmt.Println("avg cost: ", times.Load()/counter.Load(), "ms")
+
+	return &res{
+		counter: counter.Load(),
+		qps:     counter.Load() / int64(*ts),
+		avgCost: times.Load() / counter.Load(),
+		client:  c,
+	}
+
+}
+
+func main() {
+	flag.Parse()
+	f := "\t\t"
+	fmt.Printf("并发数%v请求数%vqps%vus%vms\n", f, f, f, f)
+	for i := *start; i <= (*end); i += *step {
+		res := benchMark(i)
+		fmt.Printf("%v%v%v%v%v%v%v%v%v\n",
+			res.client, f, res.counter, f, res.qps, f, res.avgCost, f, res.avgCost/1000)
+	}
 }
