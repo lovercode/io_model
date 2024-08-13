@@ -8,6 +8,27 @@
 #include <unistd.h>
 #include <string.h>
 
+int send_n_data(int sock, size_t len) {
+    // 发送长度信息
+    uint32_t net_len = htonl(len);  // 将长度转换为网络字节序
+    if (send(sock, &net_len, sizeof(net_len), 0) != sizeof(net_len)) {
+        return -1;
+    }
+
+    // 发送实际数据
+    size_t total_sent = 0;
+    char *data_ptr = (char*)malloc(len);
+    while (total_sent < len) {
+        ssize_t sent = send(sock, data_ptr + total_sent, len - total_sent, 0);
+        if (sent == -1) {
+            free(data_ptr);
+            return -1;
+        }
+        total_sent += sent;
+    }
+    free(data_ptr);
+    return int(total_sent);
+}
 
 // 函数：安全地从socket读取指定长度的数据
 size_t read_n_bytes(int fd, char *buffer, size_t n) {
@@ -62,24 +83,34 @@ void run(int fd){
         if (read_message(fd) < 0){
             break;
         }
+        if (send_n_data(fd, 1024) < 0){
+            break;
+        }
     }
     close(fd);
     std::cout << "recv end fd:" << fd << std::endl;
 }
 
-int main() {
+int bindAddr(uint16_t port,size_t size){
     int listenFd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     struct sockaddr_in server;
-    server.sin_port = htons(8888);;
+    server.sin_port = htons(port);;
     server.sin_family = AF_INET;
     server.sin_addr.s_addr = INADDR_ANY;
-
-    if (bind(listenFd, (struct sockaddr*)&server, sizeof(server)) != 0){
-        return 0;
-    }
-
-    if (int ret = listen(listenFd, 100) != 0){
+    int ret = bind(listenFd, (struct sockaddr*)&server, sizeof(server));
+    if (ret < 0){
         return ret;
+    }
+    if (int ret = listen(listenFd, size) != 0){
+        return ret;
+    }
+    return listenFd;
+}
+
+int main() {
+    int listenFd = bindAddr(8888, 100);
+    if (listenFd < 0){
+        return listenFd;
     }
     std::vector<std::thread> threads;
     while (true){
