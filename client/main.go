@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -20,6 +21,8 @@ func main() {
 	flag.Parse()
 	wg := &sync.WaitGroup{}
 	start := time.Now()
+	var counter = &atomic.Int64{}
+	var times = &atomic.Int64{}
 	for i := 0; i < *client; i++ {
 		wg.Add(1)
 		go func() {
@@ -33,6 +36,8 @@ func main() {
 					conn.Close()
 					break
 				}
+				counter.Add(1)
+				start := time.Now()
 				data := make([]byte, *b+4)
 				// 使用binary包将int32值编码为字节序列
 				// binary.BigEndian指定大端模式，也可以选择binary.LittleEndian
@@ -57,9 +62,12 @@ func main() {
 					fmt.Println("Error reading:", err.Error())
 					break
 				}
+				times.Add(time.Now().Sub(start).Milliseconds())
 			}
 		}()
 	}
 	wg.Wait()
-
+	fmt.Println("counter: ", counter.Load())
+	fmt.Println("qps: ", counter.Load()/int64(*ts))
+	fmt.Println("avg cost: ", times.Load()/counter.Load(), "ms")
 }
